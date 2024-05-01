@@ -1,0 +1,93 @@
+import os
+import numpy as np
+from keras.utils import to_categorical
+from keras.layers import Conv2D, MaxPooling2D, Input, Dense, Flatten, concatenate, BatchNormalization, Activation, Dropout
+from keras.layers.advanced_activations import PReLU
+from keras.models import Model
+from keras.models import model_from_json
+import json
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+batch_size = 300
+epochs = 20
+no_of_filters_in_split = 120
+no_of_filters_concat = 240
+drop_out = 0.5
+
+print("Start training...")
+
+[X, Y, X_validate, Y_validate] = np.load('../NPY_files/prepared_4_split_training_dataset.npy')
+
+# Define model architecture
+inputs = [Input(shape=(8, 14, 1)) for _ in range(4)]
+
+branches = []
+for input_layer in inputs:
+    branch = Conv2D(120, (4, 3))(input_layer)
+    branch = BatchNormalization()(branch)
+    branch = PReLU()(branch)
+    branch = Dropout(drop_out)(branch)
+    branch = Conv2D(120, (3, 3))(branch)
+    branch = BatchNormalization()(branch)
+    branch = PReLU()(branch)
+    branch = Dropout(drop_out)(branch)
+    branches.append(branch)
+
+concatenated = concatenate(branches)
+
+x = Conv2D(240, (3, 3))(concatenated)
+x = BatchNormalization()(x)
+x = PReLU()(x)
+x = Dropout(drop_out)(x)
+x = Flatten()(x)
+x = Dense(100)(x)
+x = Dense(100)(x)
+output_layer = Dense(7, activation='softmax')(x)
+
+# Compile the model
+model = Model(inputs, output_layer)
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# Train the model
+results = model.fit(X, Y, batch_size=batch_size, epochs=epochs, validation_data=(X_validate, Y_validate))
+
+print("")
+
+# Create directory based on validation accuracy
+try:
+    val_accuracy = results.history['val_accuracy'][-1]
+    path = str(np.round_(val_accuracy, decimals=4))
+    os.mkdir(path)
+except OSError:
+    print("Creation of the directory %s failed" % path)
+else:
+    print("Successfully created the directory %s " % path)
+
+# Save training results and model
+history_dict = {}
+for key, value in results.history.items():
+    history_dict[key] = [float(val) for val in value]
+
+data = {
+    'accuracy_metrics': history_dict,
+    'details': {
+        'no_of_filters_in_split': int(no_of_filters_in_split),
+        'no_of_filters_concat': int(no_of_filters_concat),
+        'drop_out': float(drop_out),
+        'batch_size': int(batch_size),
+        'epochs': int(epochs)
+    }
+}
+
+with open(os.path.join(path, 'data.txt'), 'w') as outfile:
+    json.dump(data, outfile)
+
+model_json = model.to_json()
+with open(os.path.join(path, 'model.json'), "w") as json_file:
+    json_file.write(model_json)
+model.save_weights(os.path.join(path, 'model.h5'))
+
+print("Saved model to disk")
+print("Done training...")
+

@@ -1,0 +1,1 @@
+{"accuracy_metrics": {"val_loss": [0.38340072031546263], "val_accuracy": [0.8863047361373901], "loss": [0.4883732121695725], "accuracy": [0.8265733122825623]}, "details": {"no_of_filters_in_split": 120, "no_of_filters_concat": 240, "drop_out": 0.5, "batch_size": 300, "epochs": 1}}
